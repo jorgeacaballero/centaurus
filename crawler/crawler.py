@@ -23,9 +23,48 @@ try:
 except ImportError:
     from json import loads, dumps
 
+import psycopg2
 
-site = urlopen("https://arxiv.org/abs/1009.0001").getcode()
-if site.getcode() >= 200 and site.getcode() <= 400:
-    page = site.read()
-    soup = BeautifulSoup(page, "html5lib")
-    print soup
+try:
+    conn = psycopg2.connect("dbname='centaurus' host='localhost'")
+except:
+    print "I am unable to connect to the database"
+
+datadict = []
+year = 17
+month = 1
+start = 11
+ends = 20
+for index in range(start, ends):
+    url = "https://arxiv.org/abs/%s%s.%s" % (str(year),str(month).zfill(2), str(index).zfill(5))
+    site = urlopen(url)
+    if site.getcode() >= 200 and site.getcode() <= 400:
+        page = site.read()
+        soup = BeautifulSoup(page, "html5lib")
+
+        title = soup.select("h1.title.mathjax")[0].getText()
+        title = title.split("Title:\n")[1]
+
+        authors_text = soup.find_all("div", class_="authors")[0].find_all("a")
+        authors = []
+        for au in authors_text:
+            authors.append(au.getText())
+        authors_string = ",".join(authors)
+
+        abstract = soup.select("blockquote.abstract.mathjax")[0].getText()
+        abstract = abstract.split("Abstract: ")[1]
+
+        print "%s -> %s" % (url, title)
+        datadict.append({"title": title, "authors": authors_string, "abstract": abstract, "url": url, "year": year, "month": month})
+    else:
+        print "%s -> [%s] %s" % (url, site.getcode(), "Error, continuing...")
+
+
+datadict = tuple(datadict)
+cur = conn.cursor()
+cur.executemany("""insert into data (title,authors,abstract,url, year, month) values (%(title)s, %(authors)s, %(abstract)s, %(url)s, %(year)s, %(month)s) on conflict (url) do nothing""", datadict)
+
+
+conn.commit()
+conn.close()
+print "Bye!"
