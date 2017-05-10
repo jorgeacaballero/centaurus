@@ -25,8 +25,14 @@ except ImportError:
 
 import pyodbc
 
-conn = pyodbc.connect('Driver={ODBC Driver 13 for SQL Server};Server=tcp:centaurus-db.database.windows.net,1433;\
-    Database=centaurus;Uid=centaurus@centaurus-db;Pwd=k9Rjm7g8V7dh;Encrypt=yes;Connection Timeout=90;')
+try:
+    # On MacOS
+    conn = pyodbc.connect('Driver={ODBC Driver 13 for SQL Server};Server=tcp:centaurus-db.database.windows.net,1433;\
+        Database=centaurus;Uid=centaurus@centaurus-db;Pwd=k9Rjm7g8V7dh;Encrypt=yes;Connection Timeout=90;')
+except pyodbc.Error as e:
+    # On Ubuntu
+    conn = pyodbc.connect('DSN=centaurus;Database=centaurus;Uid=centaurus@centaurus-db;Pwd=k9Rjm7g8V7dh;Encrypt=yes;Connection Timeout=90;')
+
 datadict = []
 year = 17
 month = 1
