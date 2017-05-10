@@ -25,6 +25,7 @@ except ImportError:
 
 import pyodbc
 import sys
+import time
 
 try:
     # On MacOS
@@ -39,8 +40,12 @@ year = int(sys.argv[1])
 month = int(sys.argv[2])
 start = int(sys.argv[3])
 ends = int(sys.argv[4])
+delay = 1
+if len(sys.argv) > 4:
+    delay = int(sys.argv[5])
 
 for index in range(start, ends):
+    time.sleep(delay)
     cur = conn.cursor()
     url = "https://arxiv.org/abs/%s%s.%s" % (str(year),str(month).zfill(2), str(index).zfill(5))
     site = urlopen(url)
