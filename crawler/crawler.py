@@ -23,19 +23,18 @@ try:
 except ImportError:
     from json import loads, dumps
 
-import psycopg2
+import pyodbc
 
-try:
-    conn = psycopg2.connect("dbname='centaurus' host='localhost'")
-except:
-    print "I am unable to connect to the database"
-
+conn = pyodbc.connect('Driver={ODBC Driver 13 for SQL Server};Server=tcp:centaurus-db.database.windows.net,1433;\
+    Database=centaurus;Uid=centaurus@centaurus-db;Pwd=k9Rjm7g8V7dh;Encrypt=yes;Connection Timeout=90;')
 datadict = []
 year = 17
 month = 1
-start = 11
-ends = 20
+start = 7
+ends = 11
+
 for index in range(start, ends):
+    cur = conn.cursor()
     url = "https://arxiv.org/abs/%s%s.%s" % (str(year),str(month).zfill(2), str(index).zfill(5))
     site = urlopen(url)
     if site.getcode() >= 200 and site.getcode() <= 400:
@@ -47,24 +46,46 @@ for index in range(start, ends):
 
         authors_text = soup.find_all("div", class_="authors")[0].find_all("a")
         authors = []
+        authors_id = []
         for au in authors_text:
+            author_name = au.getText()
             authors.append(au.getText())
+            cur.execute('select id from author where name like ?', au.getText())
+            rows = cur.fetchall()
+            if len(rows) > 0:
+                for row in rows:
+                    authors_id.append(row.id)
+            else:
+                cur.execute('insert into author (name) output Inserted.id values (?)', author_name)
+                rows = cur.fetchall()
+                if len(rows) > 0:
+                    for row in rows:
+                        authors_id.append(row.id)
         authors_string = ",".join(authors)
 
         abstract = soup.select("blockquote.abstract.mathjax")[0].getText()
         abstract = abstract.split("Abstract: ")[1]
 
-        print "%s -> %s" % (url, title)
-        datadict.append({"title": title, "authors": authors_string, "abstract": abstract, "url": url, "year": year, "month": month})
+        try:
+            cur.execute('insert into data (title, authors,abstract,url, year, month) output Inserted.id values (?,?,?,?,?,?)', title, authors_string, abstract, url, str(year), str(month))
+            row = cur.fetchone()
+            if row:
+                data_id = row.id
+            else:
+                data_id = None
+            print "[NEW] %s -> %s" % (url, title)
+        except pyodbc.IntegrityError as e:
+            print "[EXISTING] %s -> %s" % (url, title)
+
+        for author_id in authors_id:
+            if data_id:
+                cur.execute('insert into author_data (data_id, author_id) values (?,?)', data_id, author_id)
+
     else:
-        print "%s -> [%s] %s" % (url, site.getcode(), "Error, continuing...")
-
-
-datadict = tuple(datadict)
-cur = conn.cursor()
-cur.executemany("""insert into data (title,authors,abstract,url, year, month) values (%(title)s, %(authors)s, %(abstract)s, %(url)s, %(year)s, %(month)s) on conflict (url) do nothing""", datadict)
+        print "[ERROR] %s -> Got Error [%s]" % (url, site.getcode())
 
 
 conn.commit()
 conn.close()
 print "Bye!"
+
