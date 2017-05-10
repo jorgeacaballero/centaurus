@@ -24,6 +24,7 @@ except ImportError:
     from json import loads, dumps
 
 import pyodbc
+import sys
 
 try:
     # On MacOS
@@ -31,13 +32,13 @@ try:
         Database=centaurus;Uid=centaurus@centaurus-db;Pwd=k9Rjm7g8V7dh;Encrypt=yes;Connection Timeout=90;')
 except pyodbc.Error as e:
     # On Ubuntu
-    conn = pyodbc.connect('DSN=centaurus;Database=centaurus;Uid=centaurus@centaurus-db;Pwd=k9Rjm7g8V7dh;Encrypt=yes;Connection Timeout=90;')
+    conn = pyodbc.connect('DSN=centaurusdatasource;Database=centaurus;Uid=centaurus@centaurus-db;Pwd=k9Rjm7g8V7dh;Encrypt=yes;Connection Timeout=90;')
 
 datadict = []
-year = 17
-month = 1
-start = 7
-ends = 11
+year = int(sys.argv[1])
+month = int(sys.argv[2])
+start = int(sys.argv[3])
+ends = int(sys.argv[4])
 
 for index in range(start, ends):
     cur = conn.cursor()
@@ -71,7 +72,7 @@ for index in range(start, ends):
 
         abstract = soup.select("blockquote.abstract.mathjax")[0].getText()
         abstract = abstract.split("Abstract: ")[1]
-
+        data_id = None
         try:
             cur.execute('insert into data (title, authors,abstract,url, year, month) output Inserted.id values (?,?,?,?,?,?)', title, authors_string, abstract, url, str(year), str(month))
             row = cur.fetchone()
@@ -79,19 +80,22 @@ for index in range(start, ends):
                 data_id = row.id
             else:
                 data_id = None
-            print "[NEW] %s -> %s" % (url, title)
+            print "[NEW %s] %s -> %s" % (data_id, url, title)
         except pyodbc.IntegrityError as e:
             print "[EXISTING] %s -> %s" % (url, title)
 
         for author_id in authors_id:
-            if data_id:
-                cur.execute('insert into author_data (data_id, author_id) values (?,?)', data_id, author_id)
-
+            if data_id is not None:
+                try:
+                    cur.execute('insert into author_data (data_id, author_id) values (?,?)', data_id, author_id)
+                except pyodbc.IntegrityError as e:
+                    print "[ERROR] REPEATING AUTHOR"
+        conn.commit()
     else:
         print "[ERROR] %s -> Got Error [%s]" % (url, site.getcode())
 
 
-conn.commit()
+
 conn.close()
 print "Bye!"
 
