@@ -48,7 +48,13 @@ for index in range(start, ends):
     time.sleep(delay)
     cur = conn.cursor()
     url = "https://arxiv.org/abs/%s%s.%s" % (str(year),str(month).zfill(2), str(index).zfill(5))
-    site = urlopen(url)
+    while True:
+        try:
+            site = urlopen(url)
+            break
+        except urllib2.HTTPError as e:
+            print "!!! BLOCKED !!!\nRetrying in 20 seconds..."
+            time.sleep(20)
     if site.getcode() >= 200 and site.getcode() <= 400:
         page = site.read()
         soup = BeautifulSoup(page, "html5lib")
