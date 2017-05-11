@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 from bs4 import BeautifulSoup
 
 try:
@@ -26,14 +28,24 @@ except ImportError:
 import pyodbc
 import sys
 import time
+import urllib2
 
-try:
-    # On MacOS
-    conn = pyodbc.connect('Driver={ODBC Driver 13 for SQL Server};Server=tcp:centaurus-db.database.windows.net,1433;\
-        Database=centaurus;Uid=centaurus@centaurus-db;Pwd=k9Rjm7g8V7dh;Encrypt=yes;Connection Timeout=90;')
-except pyodbc.Error as e:
-    # On Ubuntu
-    conn = pyodbc.connect('DSN=centaurusdatasource;Database=centaurus;Uid=centaurus@centaurus-db;Pwd=k9Rjm7g8V7dh;Encrypt=yes;Connection Timeout=90;')
+def connect():
+    try:
+        # On MacOS
+        return pyodbc.connect('Driver={ODBC Driver 13 for SQL Server};Server=tcp:centaurus-db.database.windows.net,1433;\
+            Database=centaurus;Uid=centaurus@centaurus-db;Pwd=k9Rjm7g8V7dh;Encrypt=yes;Connection Timeout=90;')
+    except pyodbc.Error as e:
+        try:
+            # On Ubuntu
+            return pyodbc.connect('DSN=centaurusdatasource;Database=centaurus;Uid=centaurus@centaurus-db;Pwd=k9Rjm7g8V7dh;Encrypt=yes;Connection Timeout=90;')
+        except Exception as e:
+            # On Windows
+            return pyodbc.connect('Driver={SQL Server};Server=tcp:centaurus-db.database.windows.net,1433;\
+                Database=centaurus;Uid=centaurus@centaurus-db;Pwd=k9Rjm7g8V7dh;Encrypt=yes;Connection Timeout=90;')
+
+
+conn = connect()
 
 datadict = []
 year = int(sys.argv[1])
@@ -53,8 +65,13 @@ for index in range(start, ends):
             site = urlopen(url)
             break
         except urllib2.HTTPError as e:
-            print "!!! BLOCKED !!!\nRetrying in 20 seconds..."
-            time.sleep(20)
+            print "!!! BLOCKED !!!\nRetrying in 120 seconds..."
+            time.sleep(120)
+            conn = connect()
+        except urllib2.URLError as e:
+            print "!!! NO INTERNET CONNECTION !!!\nRetrying in 120 seconds..."
+            time.sleep(120)
+            conn = connect()
     if site.getcode() >= 200 and site.getcode() <= 400:
         page = site.read()
         soup = BeautifulSoup(page, "html5lib")
