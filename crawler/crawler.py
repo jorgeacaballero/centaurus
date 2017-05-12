@@ -45,8 +45,6 @@ def connect():
                 Database=centaurus;Uid=centaurus@centaurus-db;Pwd=k9Rjm7g8V7dh;Encrypt=yes;Connection Timeout=90;')
 
 
-conn = connect()
-
 datadict = []
 year = int(sys.argv[1])
 month = int(sys.argv[2])
@@ -58,20 +56,18 @@ if len(sys.argv) > 4:
 
 for index in range(start, ends):
     time.sleep(delay)
-    cur = conn.cursor()
+
     url = "https://arxiv.org/abs/%s%s.%s" % (str(year),str(month).zfill(2), str(index).zfill(5))
     while True:
         try:
             site = urlopen(url)
+            conn = connect()
+            cur = conn.cursor()
             break
         except urllib2.HTTPError as e:
-            print "!!! BLOCKED !!!\nRetrying in 120 seconds..."
-            time.sleep(120)
-            conn = connect()
-        except urllib2.URLError as e:
-            print "!!! NO INTERNET CONNECTION !!!\nRetrying in 120 seconds..."
-            time.sleep(120)
-            conn = connect()
+            print "!!! BLOCKED !!!\nFix connection and run: python crawler.py %s %s %s %s %s" % (str(year),str(month),index, ends, delay)
+            conn.close()
+            time.sleep(60)
     if site.getcode() >= 200 and site.getcode() <= 400:
         page = site.read()
         soup = BeautifulSoup(page, "html5lib")
@@ -119,11 +115,9 @@ for index in range(start, ends):
                 except pyodbc.IntegrityError as e:
                     print "[ERROR] REPEATING AUTHOR"
         conn.commit()
+        conn.close()
     else:
         print "[ERROR] %s -> Got Error [%s]" % (url, site.getcode())
 
-
-
-conn.close()
 print "Bye!"
 
