@@ -66,7 +66,7 @@ for index in range(start, ends):
             break
         except urllib2.HTTPError as e:
             print "!!! BLOCKED !!!\nFix connection and run: python crawler.py %s %s %s %s %s" % (str(year),str(month),index, ends, delay)
-            conn.close()
+            print('\a')
             time.sleep(60)
     if site.getcode() >= 200 and site.getcode() <= 400:
         page = site.read()
