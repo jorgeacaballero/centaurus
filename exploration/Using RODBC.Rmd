@@ -1,0 +1,31 @@
+---
+title: "MSSQL Connection"
+output: html_notebook
+---
+
+To connect to a MSSQL Database using *R ODBC*. Import the library:
+
+```{r}
+library(RODBC) 
+```
+
+Create and run the connection string
+
+```{r}
+dbhandle <- odbcDriverConnect('Driver={ODBC Driver 13 for SQL Server};Server=tcp:centaurus-db.database.windows.net,1433;\
+            Database=centaurus;Uid=centaurus@centaurus-db;Pwd=k9Rjm7g8V7dh;Encrypt=yes;Connection Timeout=90;')
+```
+
+Finally run queries
+
+```{r}
+res <- sqlQuery(dbhandle, 'select * from data where month = 1')
+```
+
+The result will be a data frame. To access the DF you can use coordinates or keys:
+
+```{r}
+res[1, "title"] # Print the title of the first element
+res[1,1] # Print cell in first row first column
+```
+
