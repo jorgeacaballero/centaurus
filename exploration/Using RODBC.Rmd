@@ -3,29 +3,279 @@ title: "MSSQL Connection"
 output: html_notebook
 ---
 
-To connect to a MSSQL Database using *R ODBC*. Import the library:
+Para conectarse con el servidor MSSQL se usa la libreria *R ODBC*. Para importar, correr:
 
 ```{r}
 library(RODBC) 
 ```
 
-Create and run the connection string
+Crear y correr la cadena de conexión:
 
 ```{r}
 dbhandle <- odbcDriverConnect('Driver={ODBC Driver 13 for SQL Server};Server=tcp:centaurus-db.database.windows.net,1433;\
             Database=centaurus;Uid=centaurus@centaurus-db;Pwd=k9Rjm7g8V7dh;Encrypt=yes;Connection Timeout=90;')
 ```
 
-Finally run queries
+Utilizar `sqlQuery` para correr consultas utilizando la cadena de conexión como el primer parametro y una cadena con la consulta como el segundo parametro:
 
 ```{r}
 res <- sqlQuery(dbhandle, 'select * from data where month = 1')
 ```
 
-The result will be a data frame. To access the DF you can use coordinates or keys:
+El resultado de una consulta será un `data.frame`, dicho df se puede acceder con coordenadas o llaves:
 
 ```{r}
-res[1, "title"] # Print the title of the first element
-res[1,1] # Print cell in first row first column
+res[1, "abstract"] # Print the title of the first element
+
+res$abstract <- gsub('\n', ' ', res$abstract)
+
 ```
 
+Las llaves posibles son:
+
+```{r}
+colnames(res)
+```
+
+
+# Tidy Text
+
+Antes de analizar el texto, se deberá cumplir con ciertos criterios o estandares para el analisis de los datos. La estructura requeria es:
+
+- Cada variable es una columna
+- Cada observación es una fila
+- Cada tipo de observación es una tabla
+
+Iniciamos separando un abstract en un vector separados por la nueva linea "\n". La variable "abs_split" es un vector de carácter típico que podríamos querer analizar. Para convertirlo en un conjunto de datos de texto ordenado, primero tenemos que ponerlo en un data frame. 
+
+```{r}
+#abstract
+#abs_split <- strsplit(abstract, "\n")
+#abs_split[[1]]
+```
+
+Importamos la libreria "dplyr", una herramienta rápida y consistente para trabajar con datos como objetos,
+Tanto en memoria como fuera de memoria. Finalmente creamos un data frame nuevo con el vector creado anteriormente. 
+
+```{r}
+library(dplyr)
+text_df <- data_frame(line = res$id, text = res$abstract)
+text_df
+```
+
+Cada linea de este data frame simboliza un abstract entero, para este ejemplo usaremos cada linea como un abstract separado.
+
+Importamos la libreria "tidytext".
+Ahora, creamos un nuevo data frame separando cada palabra en un token nuevo.
+
+```{r}
+library(tidytext)
+
+ words <- text_df %>%
+  unnest_tokens(word, text)
+ words
+```
+
+Los dos argumentos básicos para unnest_tokens utilizados aquí son nombres de columna. En primer lugar tenemos el nombre de la columna de salida que se creará, ya que el texto no se inserta en él (palabra, en este caso) y, a continuación, la columna de entrada de la que proviene el texto (en este caso, texto). Recuerde que text_df arriba tiene una columna llamada texto que contiene los datos de interés.
+
+Después de usar unnest_tokens, hemos dividido cada fila de manera que haya un token (palabra) en cada fila del nuevo marco de datos; La tokenización predeterminada en unnest_tokens () es para palabras simples, como se muestra aquí. Observe también:
+
+Se conservan otras columnas, como el número de línea de cada palabra.
+La puntuación ha sido despojada.
+De forma predeterminada, unnest_tokens () convierte los tokens en minúsculas, lo que los hace más fáciles de comparar o combinar con otros conjuntos de datos. (Utilice el argumento to_lower = FALSE para desactivar este comportamiento).
+Tener los datos de texto en este formato nos permite manipular, procesar y visualizar el texto utilizando el conjunto estándar de herramientas ordenadas, a saber, dplyr, tidyr y ggplot2, como se muestra en la siguiente figura:
+
+![](http://tidytextmining.com/images/tidyflow-ch-1.png)
+
+El siguiente paso es eliminar las palabras innecesarias o que no aportan valor a los datos:
+
+```{r}
+data(stop_words)
+
+tidy_abs <- words %>%
+  anti_join(stop_words)
+
+tidy_abs
+```
+
+Contamos las palabras repetidas para tener idea de la frecuencia de las palabras:
+
+```{r}
+tidy_abs %>%
+  count(word, sort = TRUE)
+```
+
+
+Sacamos unas tablas para entender una visión mas clara de la data
+
+```{r}
+library(ggplot2)
+
+tidy_abs %>%
+  count(word, sort = TRUE) %>%
+  filter(n > 3000) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip()
+```
+
+# Frecuencias de Palabras
+
+En el estudio anterior extrajimos, limpiamos y estudiamos información basica sobre los datos del query `select * from data where month = 1`. Ahora correremos una segunda y tercera consulta a la base de datos:
+
+```{r}
+res2 <- sqlQuery(dbhandle, 'select * from data where month = 2')
+res3 <- sqlQuery(dbhandle, 'select * from data where month = 3')
+```
+
+Nuevamente limpiaremos los datos:
+
+```{r}
+res2$abstract <- gsub('\n', ' ', res2$abstract)
+res3$abstract <- gsub('\n', ' ', res3$abstract)
+
+text_df2 <- data_frame(line = res2$id, text = res2$abstract)
+text_df3 <- data_frame(line = res3$id, text = res3$abstract)
+
+words2 <- text_df2 %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words)
+words3 <- text_df3 %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words)
+words2
+```
+
+Ahora, calculamos la frecuencia de las palabras entre los tres sets de datos
+
+```{r}
+library(tidyr)
+
+words3 %>%
+  count(word, sort = TRUE)
+
+frequency <- bind_rows(mutate(text_df, mes = "Mes 1"),
+                       mutate(text_df2, mes = "Mes 2"), 
+                       mutate(text_df3, mes = "Mes 3")) %>% 
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  count(mes, word) %>%
+  group_by(mes) %>%
+  mutate(proportion = n / sum(n)) %>% 
+  select(-n) %>% 
+  spread(mes, proportion) %>% 
+  gather(mes, proportion, `Mes 1`:`Mes 2`)
+```
+
+# Word Frequency Example
+
+
+```{r}
+library(janeaustenr)
+library(dplyr)
+library(stringr)
+
+original_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(linenumber = row_number(),
+         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]",
+                                                 ignore_case = TRUE)))) %>%
+  ungroup()
+
+original_books
+```
+
+```{r}
+library(tidytext)
+tidy_books <- original_books %>%
+  unnest_tokens(word, text)
+
+tidy_books
+```
+
+```{r}
+data(stop_words)
+
+tidy_books <- tidy_books %>%
+  anti_join(stop_words)
+```
+```{r}
+tidy_books %>%
+  count(word, sort = TRUE) 
+```
+
+```{r}
+library(ggplot2)
+
+tidy_books %>%
+  count(word, sort = TRUE) %>%
+  filter(n > 600) %>%
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip()
+```
+
+```{r}
+library(gutenbergr)
+
+hgwells <- gutenberg_download(c(35, 36, 5230, 159))
+```
+
+```{r}
+tidy_hgwells <- hgwells %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words)
+```
+
+```{r}
+tidy_hgwells %>%
+  count(word, sort = TRUE)
+```
+
+```{r}
+bronte <- gutenberg_download(c(1260, 768, 969, 9182, 767))
+
+tidy_bronte <- bronte %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words)
+
+tidy_bronte %>%
+  count(word, sort = TRUE)
+```
+
+```{r}
+library(tidyr)
+
+frequency <- bind_rows(mutate(tidy_bronte, author = "Brontë Sisters"),
+                       mutate(tidy_hgwells, author = "H.G. Wells"), 
+                       mutate(tidy_books, author = "Jane Austen")) %>% 
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  count(author, word) %>%
+  group_by(author) %>%
+  mutate(proportion = n / sum(n)) %>% 
+  select(-n) %>% 
+  spread(author, proportion) %>% 
+  gather(author, proportion, `Brontë Sisters`:`H.G. Wells`)
+
+frequency
+```
+
+
+```{r}
+library(scales)
+
+# expect a warning about rows with missing values being removed
+ggplot(frequency, aes(x = proportion, y = `Jane Austen`, color = abs(`Jane Austen` - proportion))) +
+  geom_abline(color = "gray40", lty = 2) +
+  geom_jitter(alpha = 0.1, size = 2.5, width = 0.3, height = 0.3) +
+  geom_text(aes(label = word), check_overlap = TRUE, vjust = 1.5) +
+  scale_x_log10(labels = percent_format()) +
+  scale_y_log10(labels = percent_format()) +
+  scale_color_gradient(limits = c(0, 0.001), low = "darkslategray4", high = "gray75") +
+  facet_wrap(~author, ncol = 2) +
+  theme(legend.position="none") +
+  labs(y = "Jane Austen", x = NULL)
+```
